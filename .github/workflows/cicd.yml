@@ -1,0 +1,90 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io/${{ github.repository_owner }}
+  IMAGE_TAG: ${{ github.sha }}
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push api-service
+        uses: docker/build-push-action@v6
+        with:
+          context: ./api-service
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/api-service:${{ env.IMAGE_TAG }}
+            ${{ env.REGISTRY }}/api-service:latest
+      - name: Build and push worker-service
+        uses: docker/build-push-action@v6
+        with:
+          context: ./worker-service
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/worker-service:${{ env.IMAGE_TAG }}
+            ${{ env.REGISTRY }}/worker-service:latest
+      - name: Build and push frontend-service
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend-service
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/frontend-service:${{ env.IMAGE_TAG }}
+            ${{ env.REGISTRY }}/frontend-service:latest
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: 'v1.30.0'
+      - name: Configure Kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${KUBE_CONFIG}" | base64 -d > ~/.kube/config
+        env:
+          KUBE_CONFIG: ${{ secrets.KUBE_CONFIG_BASE64 }}
+      - name: Set images
+        run: |
+          sed -i "s|image: api-service:latest|image: $REGISTRY/api-service:${IMAGE_TAG}|" k8s/api-deployment.yaml
+          sed -i "s|image: worker-service:latest|image: $REGISTRY/worker-service:${IMAGE_TAG}|" k8s/worker-deployment.yaml
+          sed -i "s|image: frontend-service:latest|image: $REGISTRY/frontend-service:${IMAGE_TAG}|" k8s/frontend-deployment.yaml
+      - name: Apply manifests
+        run: |
+          kubectl apply -f k8s/namespace.yaml
+          kubectl apply -f k8s/secrets.yaml
+          kubectl apply -f k8s/postgres.yaml
+          kubectl apply -f k8s/api-deployment.yaml
+          kubectl apply -f k8s/worker-deployment.yaml
+          kubectl apply -f k8s/frontend-deployment.yaml
+      - name: Wait for rollout
+        run: |
+          set -e
+          kubectl -n app rollout status deploy/api-service --timeout=120s || (kubectl -n app rollout undo deploy/api-service && exit 1)
+          kubectl -n app rollout status deploy/worker-service --timeout=120s || (kubectl -n app rollout undo deploy/worker-service && exit 1)
+          kubectl -n app rollout status deploy/frontend-service --timeout=120s || (kubectl -n app rollout undo deploy/frontend-service && exit 1)
