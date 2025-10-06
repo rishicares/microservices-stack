@@ -1,0 +1,39 @@
+# Node
+node_modules/
+**/node_modules/
+.npmrc
+npm-debug.log*
+yarn.lock
+pnpm-lock.yaml
+
+# Python
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+.env/
+
+# Build artifacts
+**/build/
+**/dist/
+**/.cache/
+**/.parcel-cache/
+**/.next/
+
+# Logs
+*.log
+**/logs/
+
+# Docker
+**/.docker/
+
+# IDE
+.vscode/
+.idea/
+
+# Kubernetes
+**/.kube/
+
+# Misc
+.DS_Store
