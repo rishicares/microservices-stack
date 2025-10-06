@@ -1,0 +1,44 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: app
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api-service:
+    build: ./api-service
+    environment:
+      PORT: 3000
+      DATABASE_URL: postgres://app:app@db:5432/app
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+
+  worker-service:
+    build: ./worker-service
+    environment:
+      DATABASE_URL: postgres://app:app@db:5432/app
+      WORKER_INTERVAL_SECONDS: 5
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend-service:
+    build: ./frontend-service
+    depends_on:
+      - api-service
+    ports:
+      - "8080:80"
+
+volumes:
+  db_data:
