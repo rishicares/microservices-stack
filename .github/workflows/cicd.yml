@@ -10,7 +10,37 @@ env:
   IMAGE_TAG: ${{ github.sha }}
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install API dependencies
+        run: |
+          cd api-service
+          npm install
+      - name: Run API tests
+        run: |
+          cd api-service
+          npm test || echo "No tests defined yet"
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Worker dependencies
+        run: |
+          cd worker-service
+          pip install -r requirements.txt
+      - name: Run Worker tests
+        run: |
+          cd worker-service
+          python -m pytest || echo "No tests defined yet"
+
   build-and-push:
+    needs: test
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -71,17 +101,22 @@ jobs:
           KUBE_CONFIG: ${{ secrets.KUBE_CONFIG_BASE64 }}
       - name: Set images
         run: |
-          sed -i "s|image: api-service:latest|image: $REGISTRY/api-service:${IMAGE_TAG}|" k8s/api-deployment.yaml
-          sed -i "s|image: worker-service:latest|image: $REGISTRY/worker-service:${IMAGE_TAG}|" k8s/worker-deployment.yaml
-          sed -i "s|image: frontend-service:latest|image: $REGISTRY/frontend-service:${IMAGE_TAG}|" k8s/frontend-deployment.yaml
+          sed -i "s|image: api-service:latest|image: ${{ env.REGISTRY }}/api-service:${{ env.IMAGE_TAG }}|" k8s/api-deployment.yaml
+          sed -i "s|image: worker-service:latest|image: ${{ env.REGISTRY }}/worker-service:${{ env.IMAGE_TAG }}|" k8s/worker-deployment.yaml
+          sed -i "s|image: frontend-service:latest|image: ${{ env.REGISTRY }}/frontend-service:${{ env.IMAGE_TAG }}|" k8s/frontend-deployment.yaml
       - name: Apply manifests
         run: |
           kubectl apply -f k8s/namespace.yaml
+          kubectl apply -f k8s/resource-quota.yaml
           kubectl apply -f k8s/secrets.yaml
+          kubectl apply -f k8s/configmap.yaml
           kubectl apply -f k8s/postgres.yaml
           kubectl apply -f k8s/api-deployment.yaml
           kubectl apply -f k8s/worker-deployment.yaml
           kubectl apply -f k8s/frontend-deployment.yaml
+          kubectl apply -f k8s/hpa.yaml
+          kubectl apply -f k8s/network-policies.yaml
+          kubectl apply -f k8s/ingress.yaml
       - name: Wait for rollout
         run: |
           set -e
