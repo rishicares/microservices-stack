@@ -6,7 +6,7 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
 # Configuration
 NAMESPACE="app"
@@ -140,15 +140,21 @@ wait_for_rollouts() {
     log_info "Waiting for deployments to roll out..."
     
     local deployments=("api-service" "worker-service" "frontend-service")
+    local timeout=120s 
     
     for deployment in "${deployments[@]}"; do
         log_info "Waiting for $deployment rollout..."
-        if kubectl -n "$NAMESPACE" rollout status "deploy/$deployment" --timeout=300s; then
+        if kubectl -n "$NAMESPACE" rollout status "deploy/$deployment" --timeout=$timeout 2>/dev/null; then
             log_success "$deployment rolled out successfully"
         else
-            log_error "$deployment rollout failed"
+            log_error "$deployment rollout failed or timed out"
+            # Show pod status for debugging
+            echo "Pod status:"
+            kubectl -n "$NAMESPACE" get pods -l app=$deployment
+            echo "Recent logs:"
+            kubectl -n "$NAMESPACE" logs -l app=$deployment --tail=10 2>/dev/null || true
             log_warning "Attempting rollback for $deployment..."
-            kubectl -n "$NAMESPACE" rollout undo "deploy/$deployment" || true
+            kubectl -n "$NAMESPACE" rollout undo "deploy/$deployment" 2>/dev/null || true
             exit 1
         fi
     done
@@ -188,6 +194,7 @@ show_help() {
     echo "  --cleanup-only      Only clean up, don't deploy"
     echo "  --no-build          Skip building images (use existing ones)"
     echo "  --no-load           Skip loading images into cluster"
+    echo "  --skip-wait         Skip waiting for rollout completion (faster)"
     echo ""
     echo "Examples:"
     echo "  $0                           # Deploy to minikube"
@@ -201,6 +208,7 @@ CLEANUP_BEFORE=false
 CLEANUP_ONLY=false
 NO_BUILD=false
 NO_LOAD=false
+SKIP_WAIT=false
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -230,6 +238,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --no-load)
             NO_LOAD=true
+            shift
+            ;;
+        --skip-wait)
+            SKIP_WAIT=true
             shift
             ;;
         *)
@@ -264,7 +276,14 @@ main() {
     fi
     
     apply_manifests
-    wait_for_rollouts
+    
+    if [[ "$SKIP_WAIT" != true ]]; then
+        wait_for_rollouts
+    else
+        log_info "Skipping rollout wait (--skip-wait enabled)"
+        log_info "Check status with: kubectl -n $NAMESPACE get pods"
+    fi
+    
     show_access_info
     
     log_success "Deployment completed successfully!"
