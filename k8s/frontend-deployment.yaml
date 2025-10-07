@@ -13,10 +13,6 @@ spec:
       labels:
         app: frontend-service
     spec:
-      securityContext:
-        runAsNonRoot: true
-        runAsUser: 101
-        runAsGroup: 101
       containers:
         - name: frontend
           image: frontend-service:latest
