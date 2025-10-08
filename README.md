@@ -34,9 +34,9 @@ This project implements a complete 3-tier microservices architecture with:
 ### Prerequisites
 
 #### Required Software
-- Docker (version 20.10+) and Docker Compose
-- kubectl (version 1.28+)
-- minikube (version 1.30+) or kind (version 0.20+)
+- Docker and Docker Compose
+- kubectl
+- minikube or kind
 - Git
 
 #### Docker Group Setup (Linux)
@@ -179,9 +179,9 @@ Use the deployment script for automated setup:
 ---
 
 ## Database Persistence Strategy
-- Postgres uses a `StatefulSet` with a `PersistentVolumeClaim` (5Gi, RWO)
+- Postgres uses a `StatefulSet` with a `PersistentVolumeClaim` (RWO)
 - Data persists across pod restarts and redeploys
-- For production, bind to a StorageClass (e.g., gp2, pd-ssd) and set size
+- For production, bind to a StorageClass and set appropriate size
 
 ---
 
@@ -302,7 +302,7 @@ docker compose down -v
 
 #### Auto-scaling
 - **Horizontal Pod Autoscaler (HPA)** for API and Frontend services
-- Scales based on CPU (70%) and Memory (80%) utilization
+- Scales based on CPU and Memory utilization
 - API service: 2-10 replicas, Frontend service: 2-5 replicas
 
 #### Security
@@ -347,8 +347,8 @@ The application follows a microservices architecture with the following componen
 ## Technology Stack
 
 ### Backend & Services
-- **API**: Node.js 20, Express.js 4.x, PostgreSQL driver (pg)
-- **Worker**: Python 3.12, psycopg3, uvloop, aiohttp
+- **API**: Node.js 20, Express.js 4.19.2, PostgreSQL driver (pg 8.13.0)
+- **Worker**: Python 3.12, psycopg 3.2.3, uvloop 0.20.0, aiohttp 3.10.11
 - **Frontend**: React 18 (CDN), vanilla JavaScript
 - **Web Server**: Nginx 1.27 Alpine
 - **Database**: PostgreSQL 16 Alpine
